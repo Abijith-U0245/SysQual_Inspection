@@ -52,6 +52,15 @@ python test_calibration.py
 ```
 - Live OD measurement with PASS/FAIL against tolerances
 
+### Identification from a saved image or video
+```bash
+python test_calibration.py --image path/to/image.jpg
+python test_calibration.py --video path/to/video.mp4
+```
+- Use this if you already calibrated the camera and want to identify a part from a static image or video file.
+- If calibration files are missing, the script falls back to a simple demo configuration so you can still try the workflow.
+- The script saves an annotated result image to output/identified_from_image.jpg.
+
 ---
 
 ## Output files (generated automatically)

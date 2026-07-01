@@ -28,9 +28,12 @@ TARGET: 20–25 good images covering these positions:
     ✓ Close to camera / farther away
 """
 
-import cv2
+import argparse
 import os
 import sys
+import time
+
+import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -46,8 +49,13 @@ def get_saved_count():
     return len([f for f in os.listdir(CALIB_IMAGES_DIR) if f.endswith('.jpg')])
 
 
-def main():
-    cap = open_camera()
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Capture checkerboard images")
+    parser.add_argument("--camera-index", type=int, default=None, help="Camera index to use")
+    parser.add_argument("--no-display", action="store_true", help="Use console-only capture mode")
+    args = parser.parse_args(argv)
+
+    cap = open_camera(args.camera_index)
     saved = get_saved_count()
     print(f"\n{'='*55}")
     print("  STEP 1 — Checkerboard capture")
@@ -59,6 +67,17 @@ def main():
     print("  SPACE=save when detected  |  d=delete last  |  q=quit\n")
 
     last_saved_path = None
+    last_auto_save = 0.0
+    use_display = not args.no_display
+    window_name = "Step 1 — Checkerboard Capture (q to quit)"
+
+    if use_display:
+        try:
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, 960, 540)
+        except Exception:
+            print("  Preview window is unavailable; switching to console-only capture mode.")
+            use_display = False
 
     while True:
         ret, frame = read_frame(cap)
@@ -67,6 +86,10 @@ def main():
             break
 
         display = frame.copy()
+        if display is None or display.size == 0:
+            print("  Empty frame received; waiting for the camera feed to stabilize...")
+            continue
+
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # Try to find checkerboard corners
@@ -114,9 +137,24 @@ def main():
             cv2.putText(display, tip, (display.shape[1] - 220, 30 + i * 22),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 50), 1)
 
-        cv2.imshow("Step 1 — Checkerboard Capture (q to quit)", display)
-
-        key = cv2.waitKey(1) & 0xFF
+        if use_display:
+            try:
+                cv2.imshow(window_name, display)
+                key = cv2.waitKey(1) & 0xFF
+            except Exception:
+                use_display = False
+                key = -1
+        else:
+            key = -1
+            if found and time.time() - last_auto_save > 1.0:
+                fname = os.path.join(CALIB_IMAGES_DIR, f"calib_{saved:03d}.jpg")
+                cv2.imwrite(fname, frame)
+                last_saved_path = fname
+                last_auto_save = time.time()
+                print(f"  Auto-saved [{saved+1}/{TARGET_IMAGES}]  →  {os.path.basename(fname)}")
+                if saved + 1 >= TARGET_IMAGES:
+                    print(f"\n  Target reached! Run step2_run_calibration.py next.")
+                    break
 
         if key == ord(' '):
             if found:
